@@ -283,7 +283,7 @@ void ClassLinker::InitFromCompiler(const std::vector<const DexFile*>& boot_class
   SirtRef<mirror::Class>
       java_lang_DexCache(self, AllocClass(self, java_lang_Class.get(), sizeof(mirror::DexCacheClass)));
   SetClassRoot(kJavaLangDexCache, java_lang_DexCache.get());
-  java_lang_DexCache->SetObjectSize(sizeof(mirror::DexCacheClass));
+  java_lang_DexCache->SetObjectSize(sizeof(mirror::DexCache));
   java_lang_DexCache->SetStatus(mirror::Class::kStatusResolved, self);
 
   // Constructor, Field, Method, and AbstractMethod are necessary so that FindClass can link members.
@@ -1630,21 +1630,22 @@ static bool NeedsInterpreter(const mirror::ArtMethod* method, const void* code) 
 }
 
 void ClassLinker::FixupStaticTrampolines(mirror::Class* klass) {
-  ClassHelper kh(klass);
-  const DexFile::ClassDef* dex_class_def = kh.GetClassDef();
-  CHECK(dex_class_def != NULL);
-  const DexFile& dex_file = kh.GetDexFile();
-  const byte* class_data = dex_file.GetClassData(*dex_class_def);
-  if (class_data == NULL) {
-    return;  // no fields or methods - for example a marker interface
+  if (klass->NumDirectMethods() == 0) {
+    return;  // No direct methods => no static methods.
   }
   Runtime* runtime = Runtime::Current();
   if (!runtime->IsStarted() || runtime->UseCompileTimeClassPath()) {
-    // OAT file unavailable
-    return;
+    return;  // OAT file unavailable.
   }
+  ClassHelper kh(klass);
+  const DexFile& dex_file = kh.GetDexFile();
+  const DexFile::ClassDef* dex_class_def = kh.GetClassDef();
+  CHECK(dex_class_def != nullptr);
+  const byte* class_data = dex_file.GetClassData(*dex_class_def);
+  // There should always be class data if there were direct methods.
+  CHECK(class_data != nullptr) << PrettyDescriptor(klass);
   UniquePtr<const OatFile::OatClass> oat_class(GetOatClass(dex_file, klass->GetDexClassDefIndex()));
-  CHECK(oat_class.get() != NULL);
+  CHECK(oat_class.get() != nullptr);
   ClassDataItemIterator it(dex_file, class_data);
   // Skip fields
   while (it.HasNextStaticField()) {
@@ -1653,7 +1654,7 @@ void ClassLinker::FixupStaticTrampolines(mirror::Class* klass) {
   while (it.HasNextInstanceField()) {
     it.Next();
   }
-  // Link the code of methods skipped by LinkCode
+  // Link the code of methods skipped by LinkCode.
   for (size_t method_index = 0; it.HasNextDirectMethod(); ++method_index, it.Next()) {
     mirror::ArtMethod* method = klass->GetDirectMethod(method_index);
     if (!method->IsStatic()) {
@@ -3896,6 +3897,11 @@ bool ClassLinker::LinkFields(SirtRef<mirror::Class>& klass, bool is_static) {
     klass->SetNumReferenceInstanceFields(num_reference_fields);
     if (!klass->IsVariableSize()) {
       DCHECK_GE(size, sizeof(mirror::Object)) << ClassHelper(klass.get(), this).GetDescriptor();
+      size_t previous_size = klass->GetObjectSize();
+      if (previous_size != 0) {
+        // Make sure that we didn't originally have an incorrect size.
+        CHECK_EQ(previous_size, size);
+      }
       klass->SetObjectSize(size);
     }
   }
