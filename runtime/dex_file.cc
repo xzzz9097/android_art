@@ -89,7 +89,7 @@ bool DexFile::GetChecksum(const std::string& filename, uint32_t* checksum) {
     return false;
   }
   if (IsZipMagic(magic)) {
-    UniquePtr<ZipArchive> zip_archive(ZipArchive::OpenFromFd(fd));
+    UniquePtr<ZipArchive> zip_archive(ZipArchive::OpenFromFd(fd, filename.c_str()));
     if (zip_archive.get() == NULL) {
       return false;
     }
@@ -208,7 +208,7 @@ const DexFile* DexFile::OpenFile(int fd,
 const char* DexFile::kClassesDex = "classes.dex";
 
 const DexFile* DexFile::OpenZip(int fd, const std::string& location) {
-  UniquePtr<ZipArchive> zip_archive(ZipArchive::OpenFromFd(fd));
+  UniquePtr<ZipArchive> zip_archive(ZipArchive::OpenFromFd(fd, location.c_str()));
   if (zip_archive.get() == NULL) {
     LOG(ERROR) << "Failed to open " << location << " when looking for classes.dex";
     return NULL;

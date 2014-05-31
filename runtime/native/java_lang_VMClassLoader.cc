@@ -72,7 +72,7 @@ static jstring VMClassLoader_getBootClassPathResource(JNIEnv* env, jclass, jstri
   }
   const DexFile* dex_file = path[index];
   const std::string& location(dex_file->GetLocation());
-  UniquePtr<ZipArchive> zip_archive(ZipArchive::Open(location));
+  UniquePtr<ZipArchive> zip_archive(ZipArchive::Open(location.c_str()));
   if (zip_archive.get() == NULL) {
     return NULL;
   }
